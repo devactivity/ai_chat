@@ -1,2 +1,3 @@
 # ai_chat
-Aplikasi Chat Completion AI TUI
+
+Aplikasi ini dijalankan dengan [LocalAi](https://localai.io/), pastikan platform tersebut dijalankan terlebih dahulu.
