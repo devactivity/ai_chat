@@ -1,51 +1,56 @@
+mod config;
+mod error;
+mod logging;
 mod ui;
 
-use color_eyre::Result;
+use config::Config;
+use error::{AppResult, Application};
+use log::error;
 use serde_json::json;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use ui::ChatUI;
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> AppResult<()> {
     color_eyre::install()?;
+    logging::setup_logging()?;
 
+    let config = Config::load()?;
     let mut chat_ui = ChatUI::new()?;
     let client = reqwest::Client::new();
 
     while let Some(message) = chat_ui.run()? {
         let (tx, mut rx) = mpsc::channel(1);
         let client_clone = client.clone();
+        let config_clone = config.clone();
 
         tokio::spawn(async move {
-            let response = client_clone
-                .post("http://localhost:8080/v1/chat/completions")
-                .json(&json!({
-                    "model": "gpt-4",
-                    "messages": [{
-                        "role": "user",
-                        "content": message
-                    }],
-                    "temperature": 0.7
-                }))
-                .send()
-                .await;
+            let result = async {
+                let response = client_clone
+                    .post(&config_clone.api_endpoint)
+                    .json(&json!({
+                        "model": config_clone.model,
+                        "messages": [{
+                            "role": "user",
+                            "content": message
+                        }],
+                        "stream": false
+                        // "temperature": config_clone.temperature
+                    }))
+                    .send()
+                    .await?;
 
-            let result = match response {
-                Ok(response) => match response.json::<serde_json::Value>().await {
-                    Ok(json_response) => {
-                        if let Some(content) =
-                            json_response["choices"][0]["message"]["content"].as_str()
-                        {
-                            Ok(content.to_string())
-                        } else {
-                            Err("failed to parse response.".to_string())
-                        }
-                    }
-                    Err(_) => Err("failed to parse JSON response".to_string()),
-                },
-                Err(_) => Err("failed to send request".to_string()),
-            };
+                let json_response: serde_json::Value = response.json().await?;
+
+                json_response["message"]["content"]
+                    .as_str()
+                    .map(|content| content.to_string())
+                    .ok_or_else(|| {
+                        Application::Unexpected("failed to parse response content".to_string())
+                    })
+            }
+            .await;
 
             tx.send(result).await.unwrap();
         });
@@ -59,16 +64,21 @@ async fn main() -> Result<()> {
                             break;
                         }
                         Some(Err(err)) => {
-                            chat_ui.add_response(err);
+                            error!("error occurred: {:?}", err);
+                            chat_ui.add_response(format!("error: {}",
+                            err.user_friendly_message()));
+                            chat_ui.add_response(format!("for more details, please check the log file at: {}
+            ", logging::get_log_file_path().display()));
                             break;
                         }
                         None => {
-                            chat_ui.add_response("unexpected error occured".to_string());
+                            error!("unexpected error: channel closed unexpectedly");
+                            chat_ui.add_response("unexpected error occured. Please check the log file for more details".to_string());
                             break;
                         }
                     }
                 }
-                _ = tokio::time::sleep(Duration::from_millis(100)) => {
+                    () = tokio::time::sleep(Duration::from_millis(100)) => {
                         if let Some(action) = chat_ui.update()? {
                             if action == ui::Action::CancelRequest {
                                 chat_ui.add_response("request cancelled".to_string());
