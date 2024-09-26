@@ -5,6 +5,7 @@ use std::{fs, path::PathBuf};
 pub struct Config {
     pub api_endpoint: String,
     pub model: String,
+    pub stream: bool,
     pub temperature: f32,
 }
 
@@ -35,6 +36,7 @@ impl Config {
         let default_config = Config {
             api_endpoint: "".to_string(),
             model: "".to_string(),
+            stream: false,
             temperature: 0.7,
         };
 

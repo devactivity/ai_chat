@@ -7,14 +7,14 @@ use crossterm::{
 
 use ratatui::{
     backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout, Margin, Position},
-    style::{Color, Style, Stylize},
+    layout::{Constraint, Direction, Layout, Margin, Position, Rect},
+    style::{Color, Modifier, Style, Stylize},
     text::{Line, Span, Text},
     widgets::{
-        Block, Borders, List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation,
-        ScrollbarState,
+        Block, Borders, Clear, List, ListItem, ListState, Paragraph, Scrollbar,
+        ScrollbarOrientation, ScrollbarState, Wrap,
     },
-    Terminal,
+    Frame, Terminal,
 };
 
 use std::{
@@ -33,6 +33,8 @@ pub struct ChatUI {
     horizontal_scroll: usize,
     vertical_scroll_state: ScrollbarState,
     list_state: ListState,
+    current_response: String,
+    show_toggle: bool,
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -87,6 +89,8 @@ impl ChatUI {
             horizontal_scroll: 0,
             vertical_scroll_state: ScrollbarState::default(),
             list_state: ListState::default(),
+            current_response: String::new(),
+            show_toggle: false,
         };
         chat_ui.list_state.select(Some(0));
         Ok(chat_ui)
@@ -149,6 +153,7 @@ impl ChatUI {
                             self.list_state.select(Some(next));
                             self.vertical_scroll_state = self.vertical_scroll_state.position(next);
                         }
+                        KeyCode::Char('?') => self.toggle_help(),
                         _ => {}
                     },
                     InputMode::Editing => match key.code {
@@ -158,7 +163,7 @@ impl ChatUI {
                             self.messages.push(("user".to_string(), message.clone()));
                             self.input_mode = InputMode::Waiting;
                             self.messages
-                                .push(("system".to_string(), "Sending request...".to_string()));
+                                .push(("system".to_string(), "Generating...".to_string()));
 
                             // reset horizontal scroll when starting a new input
                             self.horizontal_scroll = 0;
@@ -194,12 +199,35 @@ impl ChatUI {
         }
     }
 
+    pub fn update_response(&mut self, new_content: &str) {
+        if self.input_mode == InputMode::Waiting {
+            self.current_response.push_str(new_content);
+
+            if let Some((role, content)) = self.messages.last_mut() {
+                if role == "assistant" {
+                    *content = self.current_response.clone();
+                }
+            }
+            // scroll to the bottom
+            self.list_state.select(Some(self.messages.len() - 1));
+            self.vertical_scroll_state =
+                self.vertical_scroll_state.position(self.messages.len() - 1);
+        }
+    }
+
     pub fn add_response(&mut self, response: String) {
         if self.input_mode == InputMode::Waiting {
             self.messages.pop();
+
+            if let Some((role, content)) = self.messages.last() {
+                if role == "system" && content == "Generating..." {
+                    self.messages.pop();
+                }
+            }
         }
         self.messages.push(("assistant".to_string(), response));
         self.input_mode = InputMode::Normal;
+        self.current_response.clear();
 
         // scroll to the bottom
         self.list_state.select(Some(self.messages.len() - 1));
@@ -208,6 +236,12 @@ impl ChatUI {
         // reset horizontal scroll when switching back to normal mode
         self.horizontal_scroll = 0;
         self.horizontal_scroll_state = ScrollbarState::default();
+    }
+
+    pub fn start_new_response(&mut self) {
+        self.input_mode = InputMode::Waiting;
+        self.current_response.clear();
+        self.messages.push(("assistant".to_string(), String::new()));
     }
 
     fn draw(&mut self) -> Result<()> {
@@ -330,7 +364,9 @@ impl ChatUI {
                         "q".bold(),
                         " to exit, ".into(),
                         "e".bold(),
-                        " to start editing".into(),
+                        " to start editing, ".into(),
+                        "?".bold(),
+                        " to show help menu".into(),
                     ],
                     Style::default(),
                 ),
@@ -354,9 +390,86 @@ impl ChatUI {
             let help_message = Paragraph::new(text);
 
             f.render_widget(help_message, chunks[1]);
+
+            if self.show_toggle {
+                render_help(f);
+            }
+
+            fn render_help(f: &mut Frame) {
+                let area = f.area();
+                let help_area = Rect::new(
+                    area.width / 4,
+                    area.height / 5,
+                    area.width / 2,
+                    area.height / 2,
+                );
+
+                f.render_widget(Clear, help_area);
+
+                let help_text = vec![
+                    Line::from("Shortcut Information"),
+                    Line::from(""),
+                    Line::from(vec![
+                        Span::styled(
+                            "?",
+                            Style::default()
+                                .fg(Color::Blue)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                        Span::raw(" to toggle/untoggle this help menu"),
+                    ]),
+                    Line::from(vec![
+                        Span::styled(
+                            "q",
+                            Style::default()
+                                .fg(Color::Blue)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                        Span::raw(" to quit the application"),
+                    ]),
+                    Line::from(vec![
+                        Span::styled(
+                            "Esc",
+                            Style::default()
+                                .fg(Color::Blue)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                        Span::raw(" to exit from Editing Mode"),
+                    ]),
+                    Line::from(vec![
+                        Span::styled(
+                            "Left/Right key",
+                            Style::default()
+                                .fg(Color::Blue)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                        Span::raw(" to scrolling horizontally"),
+                    ]),
+                    Line::from(vec![
+                        Span::styled(
+                            "Up/Down key",
+                            Style::default()
+                                .fg(Color::Blue)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                        Span::raw(" to scrolling vertically"),
+                    ]),
+                ];
+
+                let help_paragraph = Paragraph::new(help_text)
+                    .block(Block::default().title("Help").borders(Borders::ALL))
+                    .alignment(ratatui::layout::Alignment::Center)
+                    .wrap(Wrap { trim: true });
+
+                f.render_widget(help_paragraph, help_area);
+            }
         })?;
 
         Ok(())
+    }
+
+    pub fn toggle_help(&mut self) {
+        self.show_toggle = !self.show_toggle;
     }
 }
 
