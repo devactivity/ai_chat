@@ -1,0 +1,20 @@
+huggingface-hub
+sentence-transformers
+
+langchain
+chromadb
+
+tiktoken
+unstructured
+unstructured[local-pdf]
+unstructured[local-inference]
+
+llama-index
+llama-index-llms-ollama
+llama-index-embeddings-huggingface
+torch
+nltk
+
+pydantic-settings
+
+# pip install "fastapi[standard]" llama-index-vector-stores-chroma
