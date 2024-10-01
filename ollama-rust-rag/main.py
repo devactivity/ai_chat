@@ -1,9 +1,11 @@
+# main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router as api_router
 from app.core.config import settings
 from app.core.logging import setup_logging
 from app.services.llm_service import LLMService
+from app.services.langchain_service import LangchainService
 
 app = FastAPI(title=settings.PROJECT_NAME, version=settings.PROJECT_VERSION)
 
@@ -21,7 +23,8 @@ app.include_router(api_router, prefix="/api")
 
 @app.on_event("startup")
 async def startup_event():
-    LLMService.initialize()
+    await LLMService.initialize()
+    await LangchainService.initialize()
 
 if __name__ == "__main__":
     import uvicorn

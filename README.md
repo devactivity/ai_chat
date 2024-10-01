@@ -9,3 +9,5 @@ api_endpoint = "http://192.168.18.188:11434/api/chat"
 model = "MarcoAland/llama3.1-rag-indo"
 temperature = 0.7
 ```
+
+tambahkan payload `url` untuk endpoint `/api/scrape`

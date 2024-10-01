@@ -2,6 +2,11 @@ huggingface-hub
 sentence-transformers
 
 langchain
+langchain-huggingface
+langchain-community
+sentence-transformers
+faiss-cpu
+# faiss-gpu
 chromadb
 
 tiktoken
@@ -15,6 +20,7 @@ llama-index-embeddings-huggingface
 torch
 nltk
 
+beautifulsoup4
 pydantic-settings
 
 # pip install "fastapi[standard]" llama-index-vector-stores-chroma

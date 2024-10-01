@@ -25,9 +25,9 @@ class LLMService:
     index = None
 
     @classmethod
-    def initialize(cls):
+    async def initialize(cls):
         cls.embed_model = cls.init_embed_model()
-        cls.index = cls.init_index(cls.embed_model)
+        cls.index = await cls.init_index(cls.embed_model)
 
     @staticmethod
     def init_embed_model():
@@ -36,7 +36,7 @@ class LLMService:
 
     
     @staticmethod
-    def init_index(embed_model):
+    async def init_index(embed_model):
         reader = SimpleDirectoryReader(input_dir="./docs", recursive=True)
         documents = reader.load_data()
         logger.info(f"Index creating with {len(documents)} documents")
